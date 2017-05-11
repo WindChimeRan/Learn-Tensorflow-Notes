@@ -17,7 +17,6 @@ LSTM_LAYERS = 5
 LR = 0.006
 
 
-
 BATCH_START = 0
 
 def get_batch():
@@ -31,17 +30,14 @@ def get_batch():
     xs = np.arange(BATCH_START, BATCH_START+TIME_STEPS*BATCH_SIZE).reshape((BATCH_SIZE, TIME_STEPS)) / (10*np.pi)
     # seq = xs
     seq = np.sin(xs)
-    res = np.cos(xs)
-    seq = np.float32(seq)
-    res = np.float32(res)
+    res = 0.5*np.sin(2*xs)+0.1*np.cos(xs)*np.sin(xs)+0.7*np.cos(9*xs)*np.cos(9*xs)
 
     BATCH_START += TIME_STEPS
 
     return (seq[:, :, np.newaxis], res[:, :, np.newaxis], xs)
 
-def ms_error(labels, logits):
-    return tf.square(labels - logits)
-
+def l2(labels, logits):
+    return tf.nn.l2_loss(labels - logits)
 
 def compute_cost(pred,ys):
 
@@ -50,7 +46,7 @@ def compute_cost(pred,ys):
         [tf.reshape(ys, [-1], name='reshape_target')],
         [tf.ones([BATCH_SIZE * TIME_STEPS], dtype=tf.float32)],
         average_across_timesteps=True,
-        softmax_loss_function=ms_error,
+        softmax_loss_function=l2,
         name='losses'
     )
 
@@ -102,13 +98,23 @@ def main(argv=None):
 
 
                 stacked_lstm = [tf.contrib.rnn.BasicLSTMCell(CELL_SIZE, forget_bias=1.0, state_is_tuple=True) for _ in range(LSTM_LAYERS)]
-
                 lstm_cell = tf.contrib.rnn.MultiRNNCell(stacked_lstm,state_is_tuple = True)
 
-
                 with tf.name_scope('initial_state'):
-
                     cell_init_state = lstm_cell.zero_state(BATCH_SIZE, dtype=tf.float32)
+
+                '''
+                dynamic_rnn?
+
+                outputs = []
+                state = _initial_state
+                with tf.variable_scope("RNN"):
+                for time_step in range(num_steps):
+                    if time_step > 0: tf.get_variable_scope().reuse_variables()
+                    (cell_output, state) = cell(inputs[:, time_step, :], state)
+                    outputs.append(cell_output)
+                '''
+
                 cell_outputs, cell_final_state = tf.nn.dynamic_rnn(
                     lstm_cell, l_in_y, initial_state=cell_init_state, time_major=False)
 
@@ -146,7 +152,7 @@ def main(argv=None):
 
     plt.ion()
     plt.show()
-    for step in range(200):
+    for step in range(2000):
 
         seq, res, xxs = get_batch()
 
