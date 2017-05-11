@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import time
 
 
-
 # length of RNN
 TIME_STEPS = 20
 BATCH_SIZE = 50
@@ -96,8 +95,9 @@ def main(argv=None):
 
             with tf.variable_scope('LSTM_cell'):
 
-
-                stacked_lstm = [tf.contrib.rnn.BasicLSTMCell(CELL_SIZE, forget_bias=1.0, state_is_tuple=True) for _ in range(LSTM_LAYERS)]
+                dropout = lambda cell,output_keep_prob:tf.contrib.rnn.DropoutWrapper(cell,output_keep_prob = 0.8)
+                single_lstm = lambda :tf.contrib.rnn.BasicLSTMCell(CELL_SIZE, forget_bias=1.0, state_is_tuple=True)
+                stacked_lstm = [dropout(single_lstm(),output_keep_prob=0.8) for _ in range(LSTM_LAYERS)]
                 lstm_cell = tf.contrib.rnn.MultiRNNCell(stacked_lstm,state_is_tuple = True)
 
                 with tf.name_scope('initial_state'):
@@ -184,7 +184,7 @@ def main(argv=None):
         plt.draw()
         plt.pause(0.3)
 
-        if step % 20 == 0:
+        if step % 5 == 0:
             print('step {:d} \t loss = {:.8f}, ({:.3f} sec/step)'.format(step, loss, duration))
             result = sess.run(merged, feed_dict)
             writer.add_summary(result, step)
