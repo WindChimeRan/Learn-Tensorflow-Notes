@@ -7,7 +7,7 @@ import time
 # length of RNN
 TIME_STEPS = 20
 BATCH_SIZE = 50
-INPUT_SIZE = 1
+INPUT_SIZE = 2
 OUTPUT_SIZE = 1
 
 #hidden_size
@@ -27,13 +27,16 @@ def get_batch():
     global BATCH_START, TIME_STEPS
     # xs shape (50batch, 20steps)
     xs = np.arange(BATCH_START, BATCH_START+TIME_STEPS*BATCH_SIZE).reshape((BATCH_SIZE, TIME_STEPS)) / (10*np.pi)
-    # seq = xs
-    seq = np.sin(xs)
+
+    seq1 = np.sin(xs).reshape(BATCH_SIZE,TIME_STEPS,1)
+    seq2 = np.cos(xs).reshape(BATCH_SIZE,TIME_STEPS,1)
+    seq = np.concatenate([seq1,seq2],axis=2)
+
     res = 0.5*np.sin(2*xs)+0.1*np.cos(xs)*np.sin(xs)+0.7*np.cos(9*xs)*np.cos(9*xs)
 
     BATCH_START += TIME_STEPS
 
-    return (seq[:, :, np.newaxis], res[:, :, np.newaxis], xs)
+    return (seq, res[:, :, np.newaxis], xs)
 
 def l2(labels, logits):
     return tf.nn.l2_loss(labels - logits)
@@ -82,9 +85,7 @@ def main(argv=None):
             with tf.variable_scope('in_hidden'):
 
                 l_in_x = tf.reshape(xs, [-1, INPUT_SIZE], name='2_2D')  # (batch*n_step, in_size)
-                # Ws (in_size, cell_size)
                 Ws_in = _weight_variable([INPUT_SIZE, CELL_SIZE])
-                # bs (cell_size, )
                 bs_in = _bias_variable([CELL_SIZE, ])
                 # l_in_y = (batch * n_steps, cell_size)
 
@@ -97,8 +98,13 @@ def main(argv=None):
 
                 dropout = lambda cell,output_keep_prob:tf.contrib.rnn.DropoutWrapper(cell,output_keep_prob = 0.8)
                 single_lstm = lambda :tf.contrib.rnn.BasicLSTMCell(CELL_SIZE, forget_bias=1.0, state_is_tuple=True)
-                stacked_lstm = [dropout(single_lstm(),output_keep_prob=0.8) for _ in range(LSTM_LAYERS)]
+                single_gru = lambda: tf.contrib.rnn.GRUCell(CELL_SIZE)
+
+                stacked_lstm = [dropout(single_lstm(),output_keep_prob=1) for _ in range(LSTM_LAYERS)]
                 lstm_cell = tf.contrib.rnn.MultiRNNCell(stacked_lstm,state_is_tuple = True)
+
+                # lstm_cell = single_gru()
+                # lstm_cell = single_lstm()
 
                 with tf.name_scope('initial_state'):
                     cell_init_state = lstm_cell.zero_state(BATCH_SIZE, dtype=tf.float32)
@@ -106,27 +112,29 @@ def main(argv=None):
                 '''
                 dynamic_rnn?
 
-                outputs = []
+                cell_outputs = []
                 state = _initial_state
                 with tf.variable_scope("RNN"):
                 for time_step in range(num_steps):
                     if time_step > 0: tf.get_variable_scope().reuse_variables()
-                    (cell_output, state) = cell(inputs[:, time_step, :], state)
-                    outputs.append(cell_output)
+                    (cell_output_time_step, state) = cell(inputs[:, time_step, :], state)
+                    cell_outputs.append(cell_output_time_step)
+                final_state = cell_output[-1]
                 '''
 
                 cell_outputs, cell_final_state = tf.nn.dynamic_rnn(
                     lstm_cell, l_in_y, initial_state=cell_init_state, time_major=False)
 
             with tf.variable_scope('out_hidden'):
-                # shape = (batch * steps, cell_size)
+
                 l_out_x = tf.reshape(cell_outputs, [-1, CELL_SIZE], name='2_2D')
                 Ws_out = _weight_variable([CELL_SIZE, OUTPUT_SIZE])
                 bs_out = _bias_variable([OUTPUT_SIZE, ])
-                # shape = (batch * steps, output_size)
                 with tf.name_scope('Wx_plus_b'):
                     pred = tf.matmul(l_out_x, Ws_out) + bs_out
 
+                # classification head : softmax(wx+b) . cross_entropy
+                # regression head : l2
 
             with tf.name_scope('cost'):
                 cost = compute_cost(pred, ys)
@@ -192,3 +200,5 @@ def main(argv=None):
 if __name__ == '__main__':
 
     tf.app.run()
+    # a,b,c = get_batch()
+    # print(a.shape)
