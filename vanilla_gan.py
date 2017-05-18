@@ -47,38 +47,36 @@ def vanilla_gan(X,Z):
 
     G = generator(Z)
     D_real = discriminator(X)
-    D_gene = discriminator(G,reuse=True)
-
-
+    D_fake = discriminator(G,reuse=True)
 
     D_loss_real = tf.reduce_mean(
         tf.nn.sigmoid_cross_entropy_with_logits(logits=D_real, labels=tf.ones_like(D_real)))
     D_loss_fake = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=D_gene, labels=tf.zeros_like(D_gene)))
-
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake, labels=tf.zeros_like(D_fake)))
 
     loss_D = D_loss_real + D_loss_fake
 
     loss_G = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=D_gene, labels=tf.ones_like(D_gene)))
+        tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake, labels=tf.ones_like(D_fake)))
 
-
-    D_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
-    G_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-
-    train_D = tf.train.AdamOptimizer(learning_rate).minimize(loss_D, var_list=D_var_list)
-    train_G = tf.train.AdamOptimizer(learning_rate).minimize(loss_G, var_list=G_var_list)
-
-    return G, train_D, loss_D, train_G, loss_G
+    return G, loss_D, loss_G
 
 def main():
 
     with tf.device('/cpu:0'):
         with tf.device('/gpu:2'):
+
             X = tf.placeholder(tf.float32, [None, n_input])
             Z = tf.placeholder(tf.float32, [None, n_noise])
 
-            G, train_D, loss_D, train_G, loss_G = vanilla_gan(X, Z)
+            G, loss_D, loss_G = vanilla_gan(X, Z)
+
+            D_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
+            G_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+
+            train_D = tf.train.AdamOptimizer(learning_rate).minimize(loss_D, var_list=D_var_list)
+            train_G = tf.train.AdamOptimizer(learning_rate).minimize(loss_G, var_list=G_var_list)
+
 
     config = tf.ConfigProto(log_device_placement=False)
     config.gpu_options.allow_growth = True
