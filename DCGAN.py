@@ -59,14 +59,14 @@ def vanilla_gan(X,Z):
             gen_W3 = create_variables(name='gen_W3',shape = [5, 5, dim_W3, dim_W2])
             gen_W4 = create_variables(name='gen_W4', shape= [5, 5, dim_channel, dim_W3])
 
-            h1 = lrelu(batch_norm(tf.matmul(Z, gen_W1)))
-            h2 = lrelu(batch_norm(tf.matmul(h1, gen_W2)))
+            h1 = tf.nn.relu(batch_norm(tf.matmul(Z, gen_W1)))
+            h2 = tf.nn.relu(batch_norm(tf.matmul(h1, gen_W2)))
 
             h2 = tf.reshape(h2, [-1, 7, 7, dim_W2])
 
             output_shape_l3 = [batch_size, 14, 14, dim_W3]
             h3 = tf.nn.conv2d_transpose(h2, gen_W3, output_shape=output_shape_l3, strides=[1, 2, 2, 1])
-            h3 = tf.nn.elu(batch_norm(h3))
+            h3 = tf.nn.relu(batch_norm(h3))
 
             output_shape_l4 = [tf.shape(Z)[0], 28, 28, dim_channel]
             h4 = tf.nn.conv2d_transpose(h3, gen_W4, output_shape=output_shape_l4, strides=[1, 2, 2, 1])
