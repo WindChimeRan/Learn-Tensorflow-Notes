@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.contrib.layers.python.layers import initializers
 from tensorflow.examples.tutorials.mnist import input_data
+from tensorflow.python.framework import ops
 mnist = input_data.read_data_sets("MNIST", one_hot=True)
 
 batch_norm = partial(tf.contrib.layers.batch_norm, decay=0.9, epsilon=1e-5, scale=True, is_training=True)
@@ -53,36 +54,48 @@ def autoencoder_share_weight():
         loss = tf.nn.l2_loss(X-x_r)
         optimizer = tf.train.RMSPropOptimizer(1e-3).minimize(loss)
 
+
     config = tf.ConfigProto(log_device_placement=False)
     config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
-    sess.run(tf.global_variables_initializer())
 
-    n_steps = 100000
-    batch_size = 100
+    with tf.Session(config=config) as sess:
+        sess.run(tf.global_variables_initializer())
 
-
-    for i in range(n_steps):
-
-        batch_x, batch_y = mnist.train.next_batch(batch_size)
-
-        _,loss_train = sess.run([optimizer,loss],feed_dict={X:batch_x})
-
-        print(i,loss_train)
+        n_steps = 100000
+        batch_size = 100
 
 
-        if i == 20000:
+        for i in range(n_steps):
 
-            samples = sess.run(x_r,feed_dict={X:batch_x})
-            fig, ax = plt.subplots(9, 9, figsize=(9, 9))
+            batch_x, batch_y = mnist.train.next_batch(batch_size)
 
-            for ii in range(9):
-                for jj in range(9):
-                    ax[ii][jj].set_axis_off()
-                    ax[ii][jj].imshow(np.reshape(samples[ii*9+jj], (28, 28)))
+            _,loss_train = sess.run([optimizer,loss],feed_dict={X:batch_x})
 
-            plt.savefig('logs/{}.png'.format(str(i)), bbox_inches='tight')
-            plt.close(fig)
+            print(i,loss_train)
+
+
+            if i == 20000:
+
+                samples = sess.run(x_r,feed_dict={X:batch_x})
+                fig, ax = plt.subplots(9, 9, figsize=(9, 9))
+
+                for ii in range(9):
+                    for jj in range(9):
+                        ax[ii][jj].set_axis_off()
+                        ax[ii][jj].imshow(np.reshape(samples[ii*9+jj], (28, 28)))
+
+                plt.savefig('logs/{}.png'.format(str(i)), bbox_inches='tight')
+                plt.close(fig)
+
+
+
+
+
+def selu(x):
+    with ops.name_scope('elu') as scope:
+        alpha = 1.6732632423543772848170429916717
+        scale = 1.0507009873554804934193349852946
+        return scale*tf.where(x>=0.0, x, alpha*tf.nn.elu(x))
 
 
 def autoencoder():
@@ -97,9 +110,9 @@ def autoencoder():
         def wx_b(x, bn):
             x = tf.matmul(x, w) + b
             if bn == True:
-                return tf.nn.relu(batch_norm(x))
+                return selu(batch_norm(x))
             else:
-                return tf.nn.relu(x)
+                return selu(x)
 
         return wx_b
 
@@ -145,34 +158,34 @@ def autoencoder():
 
     config = tf.ConfigProto(log_device_placement=False)
     config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
-    sess.run(tf.global_variables_initializer())
+    with tf.Session(config=config) as sess:
+        sess.run(tf.global_variables_initializer())
 
-    n_steps = 100000
-    batch_size = 100
-
-
-    for i in range(n_steps):
-
-        batch_x, batch_y = mnist.train.next_batch(batch_size)
-
-        _,loss_train = sess.run([optimizer,loss],feed_dict={net.x:batch_x})
-
-        print(i,loss_train)
+        n_steps = 100000
+        batch_size = 100
 
 
-        if i == 200:
+        for i in range(n_steps):
 
-            samples = sess.run(reconstruct_x,feed_dict={net.x:batch_x})
-            fig, ax = plt.subplots(9, 9, figsize=(9, 9))
+            batch_x, batch_y = mnist.train.next_batch(batch_size)
 
-            for ii in range(9):
-                for jj in range(9):
-                    ax[ii][jj].set_axis_off()
-                    ax[ii][jj].imshow(np.reshape(samples[ii*9+jj], (28, 28)))
+            _,loss_train = sess.run([optimizer,loss],feed_dict={net.x:batch_x})
 
-            plt.savefig('logs/{}.png'.format(str(i)), bbox_inches='tight')
-            plt.close(fig)
+            print(i,loss_train)
+
+
+            if i == 200:
+
+                samples = sess.run(reconstruct_x,feed_dict={net.x:batch_x})
+                fig, ax = plt.subplots(9, 9, figsize=(9, 9))
+
+                for ii in range(9):
+                    for jj in range(9):
+                        ax[ii][jj].set_axis_off()
+                        ax[ii][jj].imshow(np.reshape(samples[ii*9+jj], (28, 28)))
+
+                plt.savefig('logs/{}.png'.format(str(i)), bbox_inches='tight')
+                plt.close(fig)
 
 
 if __name__ == '__main__':
