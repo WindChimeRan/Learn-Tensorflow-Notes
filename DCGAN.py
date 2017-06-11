@@ -2,6 +2,8 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
 from functools import partial
+from tensorflow.python.framework import ops
+from sklearn.preprocessing import StandardScaler
 from tensorflow.examples.tutorials.mnist import input_data
 
 mnist = input_data.read_data_sets('MNIST', one_hot=True)
@@ -18,7 +20,7 @@ n_noise = 128
 def get_noise(batch_size):
     return np.random.normal(size=(batch_size, n_noise))
 
-
+ACTIVATION = 'selu'
 
 
 
@@ -34,7 +36,11 @@ def get_noise(batch_size):
 #
 #     return bn_layer
 
-
+def selu(x):
+    with ops.name_scope('selu') as scope:
+        alpha = 1.6732632423543772848170429916717
+        scale = 1.0507009873554804934193349852946
+        return scale*tf.where(x>=0.0, x, alpha*tf.nn.elu(x))
 
 
 def vanilla_gan(X,Z):
@@ -59,6 +65,8 @@ def vanilla_gan(X,Z):
             gen_W3 = create_variables(name='gen_W3',shape = [5, 5, dim_W3, dim_W2])
             gen_W4 = create_variables(name='gen_W4', shape= [5, 5, dim_channel, dim_W3])
 
+
+
             h1 = tf.nn.relu(batch_norm(tf.matmul(Z, gen_W1)))
             h2 = tf.nn.relu(batch_norm(tf.matmul(h1, gen_W2)))
 
@@ -70,7 +78,7 @@ def vanilla_gan(X,Z):
 
             output_shape_l4 = [tf.shape(Z)[0], 28, 28, dim_channel]
             h4 = tf.nn.conv2d_transpose(h3, gen_W4, output_shape=output_shape_l4, strides=[1, 2, 2, 1])
-            # h4 = tf.reshape(h4,[-1,28*28])
+
 
             return h4
 
@@ -91,22 +99,34 @@ def vanilla_gan(X,Z):
 
             # block = lambda input, w: tf.nn.conv2d(
             #     batch_norm(tf.nn.conv2d(input, w, strides=[1, 2, 2, 1], padding='SAME')))
+            if ACTIVATION != 'selu':
 
-            block = lambda input, w: lrelu(
-                batch_norm(tf.nn.conv2d(input, w, strides=[1, 2, 2, 1], padding='SAME')))
+                block = lambda input, w: selu(
+                    tf.nn.conv2d(input, w, strides=[1, 2, 2, 1], padding='SAME'))
 
-            h0 = block(image,discrim_W1)
-            h1 = block(h0, discrim_W2)
-            h2 = block(h1, discrim_W3)
+                h0 = block(image, discrim_W1)
+                h1 = block(h0, discrim_W2)
+                h2 = block(h1, discrim_W3)
 
-            # h0 = tf.nn.elu(batch_norm(tf.nn.conv2d(image,discrim_W1,strides=[1, 2,2,1],padding='SAME')))
-            # h1 = tf.nn.elu(batch_norm(tf.nn.conv2d(h0, discrim_W2, strides=[1, 2, 2, 1], padding='SAME')))
-            # h2 = tf.nn.elu(batch_norm(tf.nn.conv2d(h1, discrim_W3, strides=[1, 2, 2, 1], padding='SAME')))
+                h2 = tf.reshape(h2, [batch_size, -1])
 
-            h2 = tf.reshape(h2,[batch_size,-1])
+                h3 = selu((tf.matmul(h2, discrim_W4)))
+                h4 = tf.matmul(h3, discrim_W5)
 
-            h3 = lrelu((tf.matmul(h2, discrim_W4)))
-            h4 = tf.matmul(h3, discrim_W5)
+            else:
+
+                block = lambda input, w: lrelu(
+                    batch_norm(tf.nn.conv2d(input, w, strides=[1, 2, 2, 1], padding='SAME')))
+
+                h0 = block(image,discrim_W1)
+                h1 = block(h0, discrim_W2)
+                h2 = block(h1, discrim_W3)
+
+
+                h2 = tf.reshape(h2,[batch_size,-1])
+
+                h3 = lrelu((tf.matmul(h2, discrim_W4)))
+                h4 = tf.matmul(h3, discrim_W5)
 
             return h4
 
@@ -131,6 +151,7 @@ def vanilla_gan(X,Z):
 def main():
 
     with tf.device('/cpu:0'):
+
         with tf.device('/gpu:3'):
 
             X = tf.placeholder(tf.float32, [None, 28,28,1])
@@ -140,9 +161,8 @@ def main():
             D_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
             G_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
 
-            train_D = tf.train.AdamOptimizer(learning_rate).minimize(loss_D, var_list=D_var_list)
-            train_G = tf.train.AdamOptimizer(learning_rate).minimize(loss_G, var_list=G_var_list)
-
+            train_D = tf.train.RMSPropOptimizer(learning_rate).minimize(loss_D, var_list=D_var_list)
+            train_G = tf.train.RMSPropOptimizer(learning_rate).minimize(loss_G, var_list=G_var_list)
 
     config = tf.ConfigProto(log_device_placement=False)
     config.gpu_options.allow_growth = True
@@ -156,6 +176,8 @@ def main():
     for epoch in range(total_epoch):
         for i in range(total_batch):
             batch_xs, batch_ys = mnist.train.next_batch(batch_size)
+
+
             batch_xs = np.reshape(batch_xs,[batch_size,28,28,1])
             noise = get_noise(batch_size)
 
