@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from functools import partial
 from tensorflow.python.framework import ops
-from sklearn.preprocessing import StandardScaler
 from tensorflow.examples.tutorials.mnist import input_data
 
 mnist = input_data.read_data_sets('MNIST', one_hot=True)
@@ -20,7 +19,7 @@ n_noise = 128
 def get_noise(batch_size):
     return np.random.normal(size=(batch_size, n_noise))
 
-ACTIVATION = 'selu'
+ACTIVATION = 'relu'
 
 
 
@@ -136,15 +135,37 @@ def vanilla_gan(X,Z):
     D_real = discriminator(X,reuse=False)
     D_fake = discriminator(G,reuse=True)
 
-    D_loss_real = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=D_real, labels=tf.ones_like(D_real)))
-    D_loss_fake = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake, labels=tf.zeros_like(D_fake)))
+    # D_loss_real = tf.reduce_mean(
+    #     tf.nn.sigmoid_cross_entropy_with_logits(logits=D_real, labels=tf.ones_like(D_real)))
+    # D_loss_fake = tf.reduce_mean(
+    #     tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake, labels=tf.zeros_like(D_fake)))
+    #
+    # loss_D = D_loss_real + D_loss_fake
+    #
+    # loss_G = tf.reduce_mean(
+    #     tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake, labels=tf.ones_like(D_fake)))
 
-    loss_D = D_loss_real + D_loss_fake
 
-    loss_G = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake, labels=tf.ones_like(D_fake)))
+    loss_D = tf.reduce_mean(D_fake) - tf.reduce_mean(D_real)
+    loss_G = -tf.reduce_mean(D_fake)
+
+
+    # alpha = tf.random_uniform(
+    #     shape=[batch_size, 1],
+    #     minval=0.,
+    #     maxval=1.
+    # )
+    #
+    # differences = G - X
+    # interpolates = tf.reshape(X,[-1,28*28]) + (alpha * tf.reshape(differences,[-1,28*28]))
+    # interpolates = tf.reshape(interpolates,[-1,28,28,1])
+    # gradients = tf.gradients(discriminator(interpolates, reuse=True), [interpolates])[0]
+    # slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1]))
+    # gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2)
+    # loss_D += 10 * gradient_penalty
+
+
+
 
     return G, loss_D, loss_G
 
@@ -160,6 +181,11 @@ def main():
 
             D_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
             G_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+
+            # train_D = tf.train.AdamOptimizer(1e-4, beta1=0.5, beta2=0.9).minimize(loss_D,
+            #                                                                       var_list=D_var_list)
+            # train_G = tf.train.AdamOptimizer(1e-4, beta1=0.5, beta2=0.9).minimize(loss_G,
+            #                                                                       var_list=G_var_list)
 
             train_D = tf.train.RMSPropOptimizer(learning_rate).minimize(loss_D, var_list=D_var_list)
             train_G = tf.train.RMSPropOptimizer(learning_rate).minimize(loss_G, var_list=G_var_list)
@@ -200,7 +226,7 @@ def main():
         for i in range(9):
             for j in range(9):
                 ax[i][j].set_axis_off()
-                ax[i][j].imshow(np.reshape(samples[i*9+j], (28, 28)))
+                ax[i][j].imshow(np.reshape(samples[i*9+j], (28, 28)),cmap ='gray')
 
         plt.savefig('logs/{}.png'.format(str(epoch).zfill(3)), bbox_inches='tight')
         plt.close(fig)
